@@ -1,14 +1,15 @@
 import OpenAI from "openai";
-import cors from "cors";
-import express from "express";
 
-const app = express();
-app.use(express.json());
-app.use(cors());
+export default async function handler(req, res) {
+  // Habilitar CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
-app.post("/api/generate", async (req, res) => {
   try {
     const { competition, homeTeam, awayTeam, homeScore, awayScore, scorers } = req.body;
 
@@ -23,17 +24,16 @@ Usá nombres de jugadores, apodos conocidos, nombres de equipos y términos popu
 Separá los tags con comas.
     `;
 
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await client.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
     });
 
     const text = completion.choices[0].message.content;
-    res.json({ tags: text });
+    res.status(200).json({ tags: text });
   } catch (err) {
     console.error(err);
     res.status(500).json({ tags: "Error generando tags." });
   }
-});
-
-app.listen(3000, () => console.log("Servidor de tags activo"));
+}
