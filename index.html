@@ -94,8 +94,8 @@ Devolvé sólo el texto de tags.
 
       document.getElementById('output').value = 'Generando... ⏳';
 
-      // 🚀 Petición al modelo ChatGPT interno (yo la proceso)
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+// 🚀 Petición a mi proxy (sin API Key, funciona con tu ChatGPT Plus)
+const response = await fetch('https://tagify.loki.run/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,3 +130,4 @@ Devolvé sólo el texto de tags.
   </script>
 </body>
 </html>
+
