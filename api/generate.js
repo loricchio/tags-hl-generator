@@ -1,7 +1,7 @@
 // api/generate.js
 export default async function handler(req, res) {
   // --- CORS ---
-  const ORIGIN = "https://loricchio.github.io"; // poné tu dominio público acá
+  const ORIGIN = "https://loricchio.github.io"; // tu dominio público
   res.setHeader("Access-Control-Allow-Origin", ORIGIN);
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -14,16 +14,29 @@ export default async function handler(req, res) {
     const norm = (s) =>
       String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
+    // Canoniza algunos equipos muy comunes (evita "bayer munich", "leverkusen" suelto, etc.)
+    function canonicalTeamName(s) {
+      const n = norm(s);
+      if (!n) return s;
+      if (n.includes("bayer munich") || n.includes("bayern munich") || n === "bayern") {
+        return "Bayern Munich";
+      }
+      if (n === "leverkusen" || n.includes("bayer leverkusen")) {
+        return "Bayer Leverkusen";
+      }
+      if (n === "manchester utd" || n === "man utd") return "Manchester United";
+      if (n === "manchester city" || n === "man city") return "Manchester City";
+      return s; // default
+    }
+
     let NICK_DB = null;
     async function loadNicknames() {
       if (NICK_DB) return NICK_DB;
       try {
-        // Si tu entorno soporta import JSON:
         const mod = await import("../data/nicknames.json", { assert: { type: "json" } });
         NICK_DB = mod.default || mod;
         return NICK_DB;
       } catch {
-        // Fallback a GitHub raw si lo anterior no está soportado
         const rawUrl =
           "https://raw.githubusercontent.com/loricchio/tags-hl-generator/main/data/nicknames.json";
         const resp = await fetch(rawUrl);
@@ -87,7 +100,7 @@ export default async function handler(req, res) {
       body = raw ? JSON.parse(raw) : {};
     }
 
-    const {
+    let {
       competition = "",
       homeTeam = "",
       awayTeam = "",
@@ -100,6 +113,10 @@ export default async function handler(req, res) {
       contextNotes = ""
     } = body;
 
+    // Canoniza equipos de entrada
+    homeTeam = canonicalTeamName(homeTeam);
+    awayTeam = canonicalTeamName(awayTeam);
+
     const scorersArr = toArrayOfLines(scorers);
     const scorersText = scorersArr.join(", ");
 
@@ -108,19 +125,18 @@ export default async function handler(req, res) {
     const homeNicks = lookupNicknames(db, homeTeam);
     const awayNicks = lookupNicknames(db, awayTeam);
 
-    // ---------- Prompt ----------
+    // ---------- Prompt (reforzado ES-first) ----------
     const rules = `
-- Idioma base: Español, pero incluir SIEMPRE etiquetas útiles en inglés: "highlights" y 2–3 entre "goals", "recap", "best moments", "extended highlights".
+- Base en **español**. Conservar **solo 1–3 etiquetas** en inglés (útiles): siempre "highlights" y opcionalmente 1–2 entre "goals", "recap", "best moments", "extended highlights".
 - NO inventar años/fechas/temporadas. SOLO incluir si viene explícito en 'matchDate'.
-- Sinónimos de competencia solo si corresponden con "${competition}" (no mezclar Primera si es Segunda).
-- Cruces: SIEMPRE en formato de pareja: "EquipoA EquipoB …" y "EquipoB EquipoA …".
-  ⛔ No generes tags funcionales por equipo solo (p. ej. "Mirandes goals"). Si vas a usar "highlights/goals/recap/best moments", debe ser con ambos equipos.
-- Goleadores: por cada uno, incluir 2 variantes (nombre completo y apellido) y un tag de acción: "gol de <apellido>".
-- Evitar relleno/marketing: nada de "emoción en el campo", "espectáculo futbolístico", "partido completo".
+- Sinónimos de competencia solo si corresponden con "${competition}".
+- Cruces SIEMPRE en ambos órdenes: "EquipoA EquipoB …" y "EquipoB EquipoA …".
+- Prohibido tags funcionales por equipo solo (p. ej. "Mirandes goals").
+- Goleadores: para cada uno, incluir variantes (nombre completo y apellido) + "gol de <apellido>" (español).
 - Sin duplicados (case-insensitive). Sin '#'. Cada tag ≤ 60 caracteres.
-- Si 'contextNotes' trae algo puntual (ej. "doblete de X", "derbi", "UCL group stage"), incluir 1–3 tags de eso, sin inventar.
+- Si 'contextNotes' trae algo puntual ("doblete", "derbi", "UCL group stage"), incluir 1–3 tags de eso, sin inventar.
 - Objetivo: 20–28 tags útiles. Devolver SOLO la lista separada por comas.
-- Si se proveen apodos (whitelist), usarlos tal cual. NO inventar apodos no listados.
+- Si hay apodos (whitelist), usarlos tal cual. NO inventar apodos no listados.
 `.trim();
 
     const userBlock = `
@@ -135,12 +151,13 @@ Datos:
 - apodos_local (whitelist): ${homeNicks.join(", ") || "(sin apodos)"}
 - apodos_visitante (whitelist): ${awayNicks.join(", ") || "(sin apodos)"}
 - Límite total de caracteres: ${maxLen}
+- Idioma preferido: ${lang}
 `.trim();
 
     const payload = {
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "Sos un generador de tags deportivos para YouTube: preciso, específico y sin relleno." },
+        { role: "system", content: "Sos un generador de tags deportivos para YouTube: preciso, específico y sin relleno. Priorizá español." },
         { role: "user", content: `Generá tags optimizados para HL.\n${rules}\n\n${userBlock}` }
       ],
       temperature: 0.2,
@@ -163,7 +180,7 @@ Datos:
 
     const raw = (data?.choices?.[0]?.message?.content || "").trim();
 
-    // ---------- Post-procesado ----------
+    // ---------- Post-procesado (modelo → array limpio) ----------
     const initial = raw
       .split(",")
       .map((s) => s.trim())
@@ -172,8 +189,8 @@ Datos:
 
     const { out: cleaned, seen } = uniqTags(initial);
 
-    // Bloquea tags "funcionales" por equipo solo (ej: "mirandes goals")
-    const A_ES = ["resumen", "goles", "mejores jugadas", "resultado", "compacto"];
+    // Bloqueo de tags funcionales por equipo solo
+    const A_ES = ["resumen", "goles", "mejores jugadas", "resultado", "compacto", "resumen extendido"];
     const A_EN = ["highlights", "goals", "recap", "best moments", "extended highlights"];
 
     const h = norm(homeTeam);
@@ -190,24 +207,41 @@ Datos:
       return hasAction && ((hasHome && !hasAway) || (!hasHome && hasAway));
     }
 
-    const cleanedNoSolo = cleaned.filter(t => !isTeamOnlyActionTag(t));
+    let pool = cleaned.filter(t => !isTeamOnlyActionTag(t));
+
+    // ---- Normalización lingüística a ES (manteniendo 1–3 en EN) ----
+    const toES = (t) => t
+      .replace(/\brecap\b/gi, "resumen")
+      .replace(/\bgoals?\b/gi, "goles")
+      .replace(/\bbest moments?\b/gi, "mejores jugadas")
+      .replace(/\bextended highlights?\b/gi, "resumen extendido");
+
+    // Separamos EN "útiles" para conservar pocas
+    const englishUseful = pool.filter(t => A_EN.some(k => t.toLowerCase().includes(k)));
+    const nonEnglishOrGeneric = pool.filter(t => !A_EN.some(k => t.toLowerCase().includes(k)));
+
+    // Convertimos casi todo a ES
+    pool = [
+      ...nonEnglishOrGeneric.map(toES),
+      ...englishUseful.slice(0, 3) // deja máx 3 en EN (ya filtradas por utilidad)
+    ];
 
     // ---------- Apodos (1–3 por lado) ----------
     function pushIfNew(arr, seenSet, tag) {
-      const t = String(tag || "").trim();
-      if (!t) return;
-      const key = t.toLowerCase();
+      const tt = String(tag || "").trim();
+      if (!tt) return;
+      const key = tt.toLowerCase();
       if (seenSet.has(key)) return;
-      if (t.length > 60) return;
+      if (tt.length > 60) return;
       seenSet.add(key);
-      arr.push(t);
+      arr.push(tt);
     }
 
     const extras = [];
     homeNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
     awayNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
 
-    // ---------- Tags OBLIGATORIOS (ambos órdenes) ----------
+    // ---------- Tags OBLIGATORIOS (ambos órdenes, ES y 1 EN) ----------
     const scoreTag = `${homeScore}-${awayScore}`;
     const pairs = [
       `${homeTeam} ${awayTeam}`,
@@ -217,13 +251,14 @@ Datos:
     for (const p of pairs) {
       pushIfNew(mandatory, seen, `${p} resumen`);
       pushIfNew(mandatory, seen, `${p} goles`);
-      pushIfNew(mandatory, seen, `${p} highlights`);
       pushIfNew(mandatory, seen, `${p} resultado`);
       pushIfNew(mandatory, seen, `${p} ${scoreTag}`);
+      // Dejo uno solo en inglés por pareja para cumplir el mix
+      pushIfNew(mandatory, seen, `${p} highlights`);
     }
 
     /* combinado final (modelo + apodos + obligatorios) */
-    const combined = [...cleanedNoSolo, ...extras, ...mandatory];
+    const combined = [...pool, ...extras, ...mandatory];
 
     // minúsculas a todo
     const combinedLower = combined.map(t => String(t).toLowerCase());
@@ -231,10 +266,9 @@ Datos:
     // Recorte final (límite de caracteres)
     const finalText = joinWithinLimit(combinedLower, Number(maxLen));
 
-    res.setHeader("Access-Control-Allow-Origin", ORIGIN); // por si Vercel rehúsa headers
-    return res.status(200).json({ tags: finalText || "Error generando tags." });
+    res.setHeader("Access-Control-Allow-Origin", ORIGIN);
+    return res.status(200).json({ tags: finalText || "error generando tags." });
   } catch (err) {
-    // asegurá CORS también en errores
     res.setHeader("Access-Control-Allow-Origin", "https://loricchio.github.io");
     return res.status(500).json({ error: "server_error", detail: String(err) });
   }
