@@ -1,63 +1,39 @@
-export default async function handler(req, res) {
-  // 🔓 Habilitar CORS (permite que GitHub Pages acceda)
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+import OpenAI from "openai";
+import cors from "cors";
+import express from "express";
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end(); // respuesta rápida a preflight
-  }
+const app = express();
+app.use(express.json());
+app.use(cors());
 
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+app.post("/api/generate", async (req, res) => {
   try {
-    const body = await req.json?.() || {};
-    const {
-      competition = '',
-      homeTeam = '',
-      awayTeam = '',
-      homeScore = 0,
-      awayScore = 0,
-      scorers = '',
-      lang = 'es',
-      maxLen = 500
-    } = body;
+    const { competition, homeTeam, awayTeam, homeScore, awayScore, scorers } = req.body;
 
-    const text = `
-Generá una lista optimizada de tags para un video de highlights de YouTube.
-Datos:
+    const prompt = `
+Generá tags para un video de YouTube de highlights deportivos.
 Competencia: ${competition}
-Local: ${homeTeam}
-Visitante: ${awayTeam}
+Equipos: ${homeTeam} vs ${awayTeam}
 Resultado: ${homeScore}-${awayScore}
-Goleadores: ${scorers}
+Goleadores: ${scorers?.join(", ")}
 
-Reglas:
-- Idioma: ${lang === 'es' ? 'Español' : 'Inglés'}
-- Incluí competencia, equipos, marcador, goleadores (con apodos conocidos), y contexto (highlights, resumen, goles, etc.)
-- Sin duplicados, sin hashtags (#), máximo ${maxLen} caracteres totales, tags separados por coma.
-Devolvé sólo el texto de tags.
-`.trim();
+Usá nombres de jugadores, apodos conocidos, nombres de equipos y términos populares en español.
+Separá los tags con comas.
+    `;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'Sos un generador de tags deportivos para YouTube.' },
-          { role: 'user', content: text }
-        ],
-        max_tokens: 300
-      })
+    const completion = await client.chat.completions.create({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const data = await response.json();
-    const tags = data?.choices?.[0]?.message?.content?.trim() || 'Error generando tags.';
-    return res.status(200).json({ tags });
+    const text = completion.choices[0].message.content;
+    res.json({ tags: text });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Error interno del proxy', detail: String(err) });
+    res.status(500).json({ tags: "Error generando tags." });
   }
-}
+});
+
+app.listen(3000, () => console.log("Servidor de tags activo"));
