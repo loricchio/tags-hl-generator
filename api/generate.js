@@ -164,27 +164,44 @@ Datos:
     // 2) dedupe + filtro por longitud
     const { out: cleaned, seen } = uniqTags(initial);
 
-    // 3) empujar 1–3 apodos por equipo (si entran)
-    function pushIfNew(arr, seenSet, tag) {
-      const t = String(tag || "").trim();
-      if (!t) return;
-      const key = t.toLowerCase();
-      if (seenSet.has(key)) return;
-      if (t.length > 60) return;
-      seenSet.add(key);
-      arr.push(t);
-    }
+// 3) empujar 1–3 apodos por equipo (si entran)
+function pushIfNew(arr, seenSet, tag) {
+  const t = String(tag || "").trim();
+  if (!t) return;
+  const key = t.toLowerCase();
+  if (seenSet.has(key)) return;
+  if (t.length > 60) return;
+  seenSet.add(key);
+  arr.push(t);
+}
 
-    const extras = [];
-    homeNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
-    awayNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
+const extras = [];
+homeNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
+awayNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
 
-    const combined = [...cleaned, ...extras];
+// ✅ Tags OBLIGATORIOS (ambos órdenes)
+const scoreTag = `${homeScore}-${awayScore}`;
+const pairs = [
+  `${homeTeam} ${awayTeam}`,
+  `${awayTeam} ${homeTeam}`
+];
+const mandatory = [];
+for (const p of pairs) {
+  pushIfNew(mandatory, seen, `${p} resumen`);
+  pushIfNew(mandatory, seen, `${p} goles`);
+  pushIfNew(mandatory, seen, `${p} highlights`);
+  pushIfNew(mandatory, seen, `${p} resultado`);
+  pushIfNew(mandatory, seen, `${p} ${scoreTag}`);
+}
 
-    // 4) recorte por maxLen total
-    const finalText = joinWithinLimit(combined, Number(maxLen));
+// combinamos: modelo + apodos + obligatorios
+const combined = [...cleaned, ...extras, ...mandatory];
 
-    return res.status(200).json({ tags: finalText || "Error generando tags." });
+// 4) recorte por maxLen total
+const finalText = joinWithinLimit(combined, Number(maxLen));
+return res.status(200).json({ tags: finalText || "Error generando tags." });
+
+    return res.status(200).json({ tags:  || "Error generando tags." });
   } catch (err) {
     return res.status(500).json({ error: "server_error", detail: String(err) });
   }
