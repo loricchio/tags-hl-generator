@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // --- CORS ---
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST")  return res.status(405).json({ error: "Método no permitido" });
 
   try {
-    // Lee body de forma segura (Vercel Node)
+    // Body seguro (Node serverless)
     let body = req.body;
     if (!body || typeof body !== "object") {
       const chunks = [];
@@ -45,7 +45,7 @@ Reglas:
 - Devolvé SOLO los tags separados por comas, con un total máximo de ${maxLen} caracteres.
 `.trim();
 
-    // Llamada directa a OpenAI (sin librerías)
+    // Llamada directa a OpenAI
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -64,15 +64,19 @@ Reglas:
     });
 
     const data = await r.json();
+
     if (!r.ok) {
-      console.error("OpenAI error:", data);
-      return res.status(502).json({ tags: "Error generando tags.", detail: data });
+      // 👉 Ahora devolvemos el status original y el detalle claro
+      return res.status(r.status).json({
+        error: "openai_error",
+        status: r.status,
+        detail: data
+      });
     }
 
     const text = data?.choices?.[0]?.message?.content?.trim() || "Error generando tags.";
     return res.status(200).json({ tags: text });
   } catch (err) {
-    console.error("Server error:", err);
-    return res.status(500).json({ tags: "Error generando tags.", detail: String(err) });
+    return res.status(500).json({ error: "server_error", detail: String(err) });
   }
 }
