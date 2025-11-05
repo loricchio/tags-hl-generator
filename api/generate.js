@@ -1,10 +1,12 @@
 // api/generate.js
 export default async function handler(req, res) {
   // --- CORS ---
-  res.setHeader("Access-Control-Allow-Origin", "*"); // si querés, cambiá por "https://loricchio.github.io"
+  const ORIGIN = "https://loricchio.github.io"; // poné tu dominio público acá
+  res.setHeader("Access-Control-Allow-Origin", ORIGIN);
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
   try {
@@ -15,13 +17,13 @@ export default async function handler(req, res) {
     let NICK_DB = null;
     async function loadNicknames() {
       if (NICK_DB) return NICK_DB;
-      // 1) Import JSON empacado en el build de Vercel
       try {
+        // Si tu entorno soporta import JSON:
         const mod = await import("../data/nicknames.json", { assert: { type: "json" } });
         NICK_DB = mod.default || mod;
         return NICK_DB;
       } catch {
-        // 2) Fallback a raw GitHub (por si falla el import en algún entorno)
+        // Fallback a GitHub raw si lo anterior no está soportado
         const rawUrl =
           "https://raw.githubusercontent.com/loricchio/tags-hl-generator/main/data/nicknames.json";
         const resp = await fetch(rawUrl);
@@ -29,7 +31,6 @@ export default async function handler(req, res) {
           NICK_DB = await resp.json();
           return NICK_DB;
         }
-        // 3) Último recurso: base vacía
         NICK_DB = { teams: {}, variants: {} };
         return NICK_DB;
       }
@@ -121,6 +122,7 @@ export default async function handler(req, res) {
 - Objetivo: 20–28 tags útiles. Devolver SOLO la lista separada por comas.
 - Si se proveen apodos (whitelist), usarlos tal cual. NO inventar apodos no listados.
 `.trim();
+
     const userBlock = `
 Datos:
 - Competencia: ${competition}
@@ -161,7 +163,7 @@ Datos:
 
     const raw = (data?.choices?.[0]?.message?.content || "").trim();
 
-    // ---------- Post-procesado (modelo → array limpio) ----------
+    // ---------- Post-procesado ----------
     const initial = raw
       .split(",")
       .map((s) => s.trim())
@@ -169,26 +171,26 @@ Datos:
       .map((s) => s.replace(/\s+/g, " "));
 
     const { out: cleaned, seen } = uniqTags(initial);
-    // --- Bloquea tags "funcionales" por equipo solo (ej: "mirandes goals") y fuerza minúsculas al final
-const A_ES = ["resumen", "goles", "mejores jugadas", "resultado", "compacto"];
-const A_EN = ["highlights", "goals", "recap", "best moments", "extended highlights"];
 
-const h = norm(homeTeam);      // normalizados (sin acentos, minúsculas)
-const a = norm(awayTeam);
+    // Bloquea tags "funcionales" por equipo solo (ej: "mirandes goals")
+    const A_ES = ["resumen", "goles", "mejores jugadas", "resultado", "compacto"];
+    const A_EN = ["highlights", "goals", "recap", "best moments", "extended highlights"];
 
-function includesWord(s, w) {
-  return new RegExp(`(^|\\s)${w}(\\s|$)`, "i").test(s);
-}
-function isTeamOnlyActionTag(tag) {
-  const t = tag.toLowerCase();
-  const hasHome = includesWord(norm(t), h);
-  const hasAway = includesWord(norm(t), a);
-  const hasAction = [...A_ES, ...A_EN].some(k => t.includes(k));
-  return hasAction && ((hasHome && !hasAway) || (!hasHome && hasAway));
-}
+    const h = norm(homeTeam);
+    const a = norm(awayTeam);
 
-// 2.a) limpiamos los funcionales "por equipo"
-const cleanedNoSolo = cleaned.filter(t => !isTeamOnlyActionTag(t));
+    function includesWord(s, w) {
+      return new RegExp(`(^|\\s)${w}(\\s|$)`, "i").test(s);
+    }
+    function isTeamOnlyActionTag(tag) {
+      const t = tag.toLowerCase();
+      const hasHome = includesWord(norm(t), h);
+      const hasAway = includesWord(norm(t), a);
+      const hasAction = [...A_ES, ...A_EN].some(k => t.includes(k));
+      return hasAction && ((hasHome && !hasAway) || (!hasHome && hasAway));
+    }
+
+    const cleanedNoSolo = cleaned.filter(t => !isTeamOnlyActionTag(t));
 
     // ---------- Apodos (1–3 por lado) ----------
     function pushIfNew(arr, seenSet, tag) {
@@ -220,17 +222,20 @@ const cleanedNoSolo = cleaned.filter(t => !isTeamOnlyActionTag(t));
       pushIfNew(mandatory, seen, `${p} ${scoreTag}`);
     }
 
-   / combinado final (modelo + apodos + obligatorios)
-const combined = [...cleanedNoSolo, ...extras, ...mandatory];
+    /* combinado final (modelo + apodos + obligatorios) */
+    const combined = [...cleanedNoSolo, ...extras, ...mandatory];
 
-// 🔻 Fuerza minúsculas en TODOS los tags
-const combinedLower = combined.map(t => String(t).toLowerCase());
+    // minúsculas a todo
+    const combinedLower = combined.map(t => String(t).toLowerCase());
 
-// Recorte final
-const finalText = joinWithinLimit(combinedLower, Number(maxLen));
+    // Recorte final (límite de caracteres)
+    const finalText = joinWithinLimit(combinedLower, Number(maxLen));
 
+    res.setHeader("Access-Control-Allow-Origin", ORIGIN); // por si Vercel rehúsa headers
     return res.status(200).json({ tags: finalText || "Error generando tags." });
   } catch (err) {
+    // asegurá CORS también en errores
+    res.setHeader("Access-Control-Allow-Origin", "https://loricchio.github.io");
     return res.status(500).json({ error: "server_error", detail: String(err) });
   }
 }
