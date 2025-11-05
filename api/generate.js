@@ -1,27 +1,27 @@
 // api/generate.js
 export default async function handler(req, res) {
-  // --- CORS (permitimos GitHub Pages y cualquier preview) ---
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // --- CORS ---
+  res.setHeader("Access-Control-Allow-Origin", "*"); // si querés, cambiá por "https://loricchio.github.io"
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
   try {
-    // ---------- Utilidades ----------
+    // ---------- Utils ----------
     const norm = (s) =>
       String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
     let NICK_DB = null;
     async function loadNicknames() {
       if (NICK_DB) return NICK_DB;
-      // 1) Intento importar el JSON empacado por Vercel
+      // 1) Import JSON empacado en el build de Vercel
       try {
         const mod = await import("../data/nicknames.json", { assert: { type: "json" } });
         NICK_DB = mod.default || mod;
         return NICK_DB;
       } catch {
-        // 2) Fallback: raw de GitHub (por si el import falla en algún entorno)
+        // 2) Fallback a raw GitHub (por si falla el import en algún entorno)
         const rawUrl =
           "https://raw.githubusercontent.com/loricchio/tags-hl-generator/main/data/nicknames.json";
         const resp = await fetch(rawUrl);
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
         if (!tag) continue;
         const key = tag.toLowerCase();
         if (seen.has(key)) continue;
-        if (tag.length > 60) continue;
+        if (tag.length > 60) continue; // tag máximo 60 chars
         seen.add(key);
         out.push(tag);
       }
@@ -67,6 +67,14 @@ export default async function handler(req, res) {
         else break;
       }
       return out.join(", ");
+    }
+
+    function toArrayOfLines(raw) {
+      if (Array.isArray(raw)) return raw;
+      return String(raw || "")
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
 
     // ---------- Body seguro ----------
@@ -91,7 +99,8 @@ export default async function handler(req, res) {
       contextNotes = ""
     } = body;
 
-    const scorersText = Array.isArray(scorers) ? scorers.join(", ") : String(scorers || "");
+    const scorersArr = toArrayOfLines(scorers);
+    const scorersText = scorersArr.join(", ");
 
     // ---------- Nicknames ----------
     const db = await loadNicknames();
@@ -103,12 +112,12 @@ export default async function handler(req, res) {
 - Idioma base: Español, pero incluir SIEMPRE etiquetas útiles en inglés: "highlights" y 2–3 entre "goals", "recap", "best moments", "extended highlights".
 - NO inventar años/fechas/temporadas. SOLO incluir si viene explícito en 'matchDate'.
 - Incluir sinónimos de competencia si aplica (p. ej. LaLiga, Liga española, Primera División de España) pero solo cuando correspondan con "${competition}".
-- Equipos: agregar variantes canónicas SOLO si corresponden (sin inventar). Si los nombres reales no coinciden, omitir.
+- Equipos: agregar variantes canónicas SOLO si corresponden (sin inventar).
 - Cruces: "X vs Y" y "Y vs X". Incluir marcador exacto.
 - Goleadores: por cada uno, incluir al menos dos variantes (nombre completo y apellido) y 1 tag de acción: "gol de <Apellido>".
 - Evitar relleno/marketing: NO "emoción en el campo", NO "espectáculo futbolístico", NO "partido completo".
 - Sin duplicados (case-insensitive). Sin '#'. Cada tag ≤ 60 caracteres.
-- Si 'contextNotes' viene con algo puntual (ej. "doblete de X", "derbi", "UCL group stage"), incluir 1–3 tags de eso, sin inventar.
+- Si 'contextNotes' trae algo puntual (ej. "doblete de X", "derbi", "UCL group stage"), incluir 1–3 tags de eso, sin inventar.
 - Objetivo: entre 20 y 28 tags útiles. Devolver SOLO la lista, separada por comas, sin texto adicional.
 - Si se proveen apodos (whitelist), usarlos tal cual. NO inventar apodos no listados.
 `.trim();
@@ -153,55 +162,52 @@ Datos:
 
     const raw = (data?.choices?.[0]?.message?.content || "").trim();
 
-    // ---------- Post-procesado ----------
-    // 1) normalizamos output del modelo a array de tags
+    // ---------- Post-procesado (modelo → array limpio) ----------
     const initial = raw
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
       .map((s) => s.replace(/\s+/g, " "));
 
-    // 2) dedupe + filtro por longitud
     const { out: cleaned, seen } = uniqTags(initial);
 
-// 3) empujar 1–3 apodos por equipo (si entran)
-function pushIfNew(arr, seenSet, tag) {
-  const t = String(tag || "").trim();
-  if (!t) return;
-  const key = t.toLowerCase();
-  if (seenSet.has(key)) return;
-  if (t.length > 60) return;
-  seenSet.add(key);
-  arr.push(t);
-}
+    // ---------- Apodos (1–3 por lado) ----------
+    function pushIfNew(arr, seenSet, tag) {
+      const t = String(tag || "").trim();
+      if (!t) return;
+      const key = t.toLowerCase();
+      if (seenSet.has(key)) return;
+      if (t.length > 60) return;
+      seenSet.add(key);
+      arr.push(t);
+    }
 
-const extras = [];
-homeNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
-awayNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
+    const extras = [];
+    homeNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
+    awayNicks.slice(0, 3).forEach((n) => pushIfNew(extras, seen, n));
 
-// ✅ Tags OBLIGATORIOS (ambos órdenes)
-const scoreTag = `${homeScore}-${awayScore}`;
-const pairs = [
-  `${homeTeam} ${awayTeam}`,
-  `${awayTeam} ${homeTeam}`
-];
-const mandatory = [];
-for (const p of pairs) {
-  pushIfNew(mandatory, seen, `${p} resumen`);
-  pushIfNew(mandatory, seen, `${p} goles`);
-  pushIfNew(mandatory, seen, `${p} highlights`);
-  pushIfNew(mandatory, seen, `${p} resultado`);
-  pushIfNew(mandatory, seen, `${p} ${scoreTag}`);
-}
+    // ---------- Tags OBLIGATORIOS (ambos órdenes) ----------
+    const scoreTag = `${homeScore}-${awayScore}`;
+    const pairs = [
+      `${homeTeam} ${awayTeam}`,
+      `${awayTeam} ${homeTeam}`
+    ];
+    const mandatory = [];
+    for (const p of pairs) {
+      pushIfNew(mandatory, seen, `${p} resumen`);
+      pushIfNew(mandatory, seen, `${p} goles`);
+      pushIfNew(mandatory, seen, `${p} highlights`);
+      pushIfNew(mandatory, seen, `${p} resultado`);
+      pushIfNew(mandatory, seen, `${p} ${scoreTag}`);
+    }
 
-// combinamos: modelo + apodos + obligatorios
-const combined = [...cleaned, ...extras, ...mandatory];
+    // combinado final (modelo + apodos + obligatorios)
+    const combined = [...cleaned, ...extras, ...mandatory];
 
-// 4) recorte por maxLen total
-const finalText = joinWithinLimit(combined, Number(maxLen));
-return res.status(200).json({ tags: finalText || "Error generando tags." });
+    // ---------- Recorte final por maxLen ----------
+    const finalText = joinWithinLimit(combined, Number(maxLen));
 
-    return res.status(200).json({ tags:  || "Error generando tags." });
+    return res.status(200).json({ tags: finalText || "Error generando tags." });
   } catch (err) {
     return res.status(500).json({ error: "server_error", detail: String(err) });
   }
