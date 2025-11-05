@@ -111,17 +111,16 @@ export default async function handler(req, res) {
     const rules = `
 - Idioma base: Español, pero incluir SIEMPRE etiquetas útiles en inglés: "highlights" y 2–3 entre "goals", "recap", "best moments", "extended highlights".
 - NO inventar años/fechas/temporadas. SOLO incluir si viene explícito en 'matchDate'.
-- Incluir sinónimos de competencia si aplica (p. ej. LaLiga, Liga española, Primera División de España) pero solo cuando correspondan con "${competition}".
-- Equipos: agregar variantes canónicas SOLO si corresponden (sin inventar).
-- Cruces: "X vs Y" y "Y vs X". Incluir marcador exacto.
-- Goleadores: por cada uno, incluir al menos dos variantes (nombre completo y apellido) y 1 tag de acción: "gol de <Apellido>".
-- Evitar relleno/marketing: NO "emoción en el campo", NO "espectáculo futbolístico", NO "partido completo".
+- Sinónimos de competencia solo si corresponden con "${competition}" (no mezclar Primera si es Segunda).
+- Cruces: SIEMPRE en formato de pareja: "EquipoA EquipoB …" y "EquipoB EquipoA …".
+  ⛔ No generes tags funcionales por equipo solo (p. ej. "Mirandes goals"). Si vas a usar "highlights/goals/recap/best moments", debe ser con ambos equipos.
+- Goleadores: por cada uno, incluir 2 variantes (nombre completo y apellido) y un tag de acción: "gol de <apellido>".
+- Evitar relleno/marketing: nada de "emoción en el campo", "espectáculo futbolístico", "partido completo".
 - Sin duplicados (case-insensitive). Sin '#'. Cada tag ≤ 60 caracteres.
 - Si 'contextNotes' trae algo puntual (ej. "doblete de X", "derbi", "UCL group stage"), incluir 1–3 tags de eso, sin inventar.
-- Objetivo: entre 20 y 28 tags útiles. Devolver SOLO la lista, separada por comas, sin texto adicional.
+- Objetivo: 20–28 tags útiles. Devolver SOLO la lista separada por comas.
 - Si se proveen apodos (whitelist), usarlos tal cual. NO inventar apodos no listados.
 `.trim();
-
     const userBlock = `
 Datos:
 - Competencia: ${competition}
@@ -170,6 +169,26 @@ Datos:
       .map((s) => s.replace(/\s+/g, " "));
 
     const { out: cleaned, seen } = uniqTags(initial);
+    // --- Bloquea tags "funcionales" por equipo solo (ej: "mirandes goals") y fuerza minúsculas al final
+const A_ES = ["resumen", "goles", "mejores jugadas", "resultado", "compacto"];
+const A_EN = ["highlights", "goals", "recap", "best moments", "extended highlights"];
+
+const h = norm(homeTeam);      // normalizados (sin acentos, minúsculas)
+const a = norm(awayTeam);
+
+function includesWord(s, w) {
+  return new RegExp(`(^|\\s)${w}(\\s|$)`, "i").test(s);
+}
+function isTeamOnlyActionTag(tag) {
+  const t = tag.toLowerCase();
+  const hasHome = includesWord(norm(t), h);
+  const hasAway = includesWord(norm(t), a);
+  const hasAction = [...A_ES, ...A_EN].some(k => t.includes(k));
+  return hasAction && ((hasHome && !hasAway) || (!hasHome && hasAway));
+}
+
+// 2.a) limpiamos los funcionales "por equipo"
+const cleanedNoSolo = cleaned.filter(t => !isTeamOnlyActionTag(t));
 
     // ---------- Apodos (1–3 por lado) ----------
     function pushIfNew(arr, seenSet, tag) {
@@ -201,11 +220,14 @@ Datos:
       pushIfNew(mandatory, seen, `${p} ${scoreTag}`);
     }
 
-    // combinado final (modelo + apodos + obligatorios)
-    const combined = [...cleaned, ...extras, ...mandatory];
+   / combinado final (modelo + apodos + obligatorios)
+const combined = [...cleanedNoSolo, ...extras, ...mandatory];
 
-    // ---------- Recorte final por maxLen ----------
-    const finalText = joinWithinLimit(combined, Number(maxLen));
+// 🔻 Fuerza minúsculas en TODOS los tags
+const combinedLower = combined.map(t => String(t).toLowerCase());
+
+// Recorte final
+const finalText = joinWithinLimit(combinedLower, Number(maxLen));
 
     return res.status(200).json({ tags: finalText || "Error generando tags." });
   } catch (err) {
