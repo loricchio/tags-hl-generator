@@ -95,7 +95,7 @@ Devolvé sólo el texto de tags.
       document.getElementById('output').value = 'Generando... ⏳';
 
 // 🚀 Petición a mi proxy (sin API Key, funciona con tu ChatGPT Plus)
-const response = await fetch('https://tagify.loki.run/api/generate', {
+const response = await fetch('https://tags-hl-generator.vercel.app/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,4 +130,5 @@ const response = await fetch('https://tagify.loki.run/api/generate', {
   </script>
 </body>
 </html>
+
 
