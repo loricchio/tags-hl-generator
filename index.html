@@ -10,32 +10,32 @@
   <main class="max-w-3xl mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-3xl font-bold">Generador de tags para Highlights</h1>
-      <p class="text-sm text-zinc-600">Cargá los datos básicos y yo te devuelvo los tags listos para YouTube Studio.</p>
+      <p class="text-sm text-zinc-600">Cargá los datos y te devuelvo tags listos para YouTube Studio (ES + EN, sin relleno).</p>
     </header>
 
     <section class="grid md:grid-cols-2 gap-4 mb-4">
       <div>
         <label class="block text-sm font-medium mb-1">Competencia</label>
-        <input id="competition" type="text" placeholder="Premier League" class="w-full border rounded-lg p-2" />
+        <input id="competition" type="text" placeholder="La Liga" class="w-full border rounded-lg p-2" />
       </div>
       <div>
-        <label class="block text-sm font-medium mb-1">Idioma</label>
+        <label class="block text-sm font-medium mb-1">Idioma base</label>
         <select id="lang" class="w-full border rounded-lg p-2">
-          <option value="es">Español</option>
+          <option value="es">Español (incluye “highlights”, etc.)</option>
           <option value="en">English</option>
         </select>
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">Equipo local</label>
-        <input id="homeTeam" type="text" placeholder="Tottenham Hotspur" class="w-full border rounded-lg p-2" />
+        <input id="homeTeam" type="text" placeholder="Barcelona" class="w-full border rounded-lg p-2" />
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">Equipo visitante</label>
-        <input id="awayTeam" type="text" placeholder="Crystal Palace" class="w-full border rounded-lg p-2" />
+        <input id="awayTeam" type="text" placeholder="Real Madrid" class="w-full border rounded-lg p-2" />
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">Goles local</label>
-        <input id="homeScore" type="number" min="0" value="4" class="w-full border rounded-lg p-2" />
+        <input id="homeScore" type="number" min="0" value="2" class="w-full border rounded-lg p-2" />
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">Goles visitante</label>
@@ -45,7 +45,21 @@
 
     <section class="mb-4">
       <label class="block text-sm font-medium mb-1">Goleadores (uno por línea)</label>
-      <textarea id="scorers" rows="4" class="w-full border rounded-lg p-2" placeholder="Cristian Romero (Tottenham)\nMicky Van De Ven (Tottenham)\nBrennan Johnson (Tottenham)\nJoao Palinha (Crystal Palace)\nJefferson Lerma (Crystal Palace)"></textarea>
+      <textarea id="scorers" rows="4" class="w-full border rounded-lg p-2" placeholder="Lamine Yamal (Barcelona)
+Pedri (Barcelona)
+Kylian Mbappé (Real Madrid)"></textarea>
+      <p class="text-xs text-zinc-500 mt-1">Formato libre: “Nombre (Equipo)” o solo el nombre.</p>
+    </section>
+
+    <section class="grid md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Fecha del partido (opcional)</label>
+        <input id="matchDate" type="text" placeholder="2025-11-05 o 'octavos UCL 2025'" class="w-full border rounded-lg p-2" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Contexto (opcional)</label>
+        <input id="contextNotes" type="text" placeholder="Ej: debut de Mbappé, ‘El Clásico’, UCL group stage" class="w-full border rounded-lg p-2" />
+      </div>
     </section>
 
     <section class="grid md:grid-cols-2 gap-4 mb-6">
@@ -62,61 +76,67 @@
     <section>
       <label class="block text-sm font-medium mb-1">Resultado</label>
       <textarea id="output" rows="6" class="w-full border rounded-lg p-2" readonly></textarea>
+      <p class="text-xs text-zinc-500 mt-2">Tip: YouTube acepta pegar la lista separada por comas.</p>
     </section>
   </main>
 
-<script>
-  function parseScorers(raw) {
-    return raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  }
-
-  async function generarTags() {
-    const competition = document.getElementById('competition').value.trim();
-    const homeTeam   = document.getElementById('homeTeam').value.trim();
-    const awayTeam   = document.getElementById('awayTeam').value.trim();
-    const homeScore  = Number(document.getElementById('homeScore').value || 0);
-    const awayScore  = Number(document.getElementById('awayScore').value || 0);
-    const scorers    = parseScorers(document.getElementById('scorers').value || '');
-    const lang       = document.getElementById('lang').value;
-    const maxLen     = Number(document.getElementById('maxLen').value || 500);
-
-    const output = document.getElementById('output');
-    output.value = 'Generando... ⏳';
-
-    try {
-      const res = await fetch('https://tags-hl-generator.vercel.app/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ competition, homeTeam, awayTeam, homeScore, awayScore, scorers, lang, maxLen })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error('Proxy error:', data);
-        output.value = 'Error generando tags.';
-        return;
-      }
-      output.value = data?.tags || 'Error generando tags.';
-    } catch (e) {
-      console.error(e);
-      output.value = 'Error generando tags.';
+  <script>
+    // Helpers
+    function parseScorers(raw) {
+      return raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     }
-  }
 
-  document.getElementById('generateBtn').addEventListener('click', generarTags);
-  document.getElementById('copyBtn').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(document.getElementById('output').value);
-      const btn = document.getElementById('copyBtn');
-      const old = btn.textContent;
-      btn.textContent = '¡Copiado!';
-      setTimeout(() => btn.textContent = old, 1500);
-    } catch {}
-  });
-</script>
+    async function generarTags() {
+      const competition = document.getElementById('competition').value.trim();
+      const lang        = document.getElementById('lang').value;
+      const homeTeam    = document.getElementById('homeTeam').value.trim();
+      const awayTeam    = document.getElementById('awayTeam').value.trim();
+      const homeScore   = Number(document.getElementById('homeScore').value || 0);
+      const awayScore   = Number(document.getElementById('awayScore').value || 0);
+      const scorers     = parseScorers(document.getElementById('scorers').value || '');
+      const matchDate   = document.getElementById('matchDate').value.trim();
+      const contextNotes= document.getElementById('contextNotes').value.trim();
+      const maxLen      = Number(document.getElementById('maxLen').value || 500);
 
+      const output = document.getElementById('output');
+      output.value = 'Generando... ⏳';
+
+      try {
+        const res = await fetch('https://tags-hl-generator.vercel.app/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            competition, homeTeam, awayTeam, homeScore, awayScore,
+            scorers, lang, maxLen, matchDate, contextNotes
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          console.error('Proxy error:', data);
+          output.value = 'Error generando tags.';
+          return;
+        }
+        output.value = data?.tags || 'Error generando tags.';
+      } catch (e) {
+        console.error(e);
+        output.value = 'Error generando tags.';
+      }
+    }
+
+    document.getElementById('generateBtn').addEventListener('click', generarTags);
+
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(document.getElementById('output').value);
+        const btn = document.getElementById('copyBtn');
+        const old = btn.textContent;
+        btn.textContent = '¡Copiado!';
+        setTimeout(() => btn.textContent = old, 1500);
+      } catch {
+        alert('No se pudo copiar automáticamente. Seleccioná y copiá manualmente.');
+      }
+    });
+  </script>
 </body>
 </html>
-
-
-
