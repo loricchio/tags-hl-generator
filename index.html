@@ -1,142 +1,97 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Generador de Tags para HL</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tags Generator</title>
+<style>
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 24px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+label { font-weight: 600; font-size: 14px; }
+input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
+button { padding: 10px 16px; border: 0; border-radius: 10px; background: #111827; color: white; cursor: pointer; font-weight: 700; }
+button[disabled] { opacity: .6; cursor: not-allowed; }
+.stack { display: grid; gap: 8px; margin-bottom: 16px; }
+.card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; }
+.muted { color: #6b7280; font-size: 12px; }
+.tags { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+</style>
 </head>
-<body class="bg-zinc-100 text-zinc-900">
-  <main class="max-w-3xl mx-auto p-6">
-    <header class="mb-6">
-      <h1 class="text-3xl font-bold">Generador de tags para Highlights</h1>
-      <p class="text-sm text-zinc-600">Cargá los datos y te devuelvo tags listos para YouTube Studio (ES + EN, sin relleno).</p>
-    </header>
+<body>
+<h1>Generador de Tags (v2)</h1>
 
-    <section class="grid md:grid-cols-2 gap-4 mb-4">
-      <div>
-        <label class="block text-sm font-medium mb-1">Competencia</label>
-        <input id="competition" type="text" placeholder="La Liga" class="w-full border rounded-lg p-2" />
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Idioma base</label>
-        <select id="lang" class="w-full border rounded-lg p-2">
-          <option value="es">Español (incluye “highlights”, etc.)</option>
-          <option value="en">English</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Equipo local</label>
-        <input id="homeTeam" type="text" placeholder="Barcelona" class="w-full border rounded-lg p-2" />
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Equipo visitante</label>
-        <input id="awayTeam" type="text" placeholder="Real Madrid" class="w-full border rounded-lg p-2" />
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Goles local</label>
-        <input id="homeScore" type="number" min="0" value="2" class="w-full border rounded-lg p-2" />
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Goles visitante</label>
-        <input id="awayScore" type="number" min="0" value="1" class="w-full border rounded-lg p-2" />
-      </div>
-    </section>
 
-    <section class="mb-4">
-      <label class="block text-sm font-medium mb-1">Goleadores (uno por línea)</label>
-      <textarea id="scorers" rows="4" class="w-full border rounded-lg p-2" placeholder="Lamine Yamal (Barcelona)
-Pedri (Barcelona)
-Kylian Mbappé (Real Madrid)"></textarea>
-      <p class="text-xs text-zinc-500 mt-1">Formato libre: “Nombre (Equipo)” o solo el nombre.</p>
-    </section>
+<div class="card">
+<div class="row">
+<div class="stack">
+<label for="teamA">Equipo A</label>
+<input id="teamA" placeholder="Ej: Real Madrid" />
+</div>
+<div class="stack">
+<label for="teamB">Equipo B</label>
+<input id="teamB" placeholder="Ej: Real Betis" />
+</div>
+</div>
 
-    <section class="grid md:grid-cols-2 gap-4 mb-4">
-      <div>
-        <label class="block text-sm font-medium mb-1">Fecha del partido (opcional)</label>
-        <input id="matchDate" type="text" placeholder="2025-11-05 o 'octavos UCL 2025'" class="w-full border rounded-lg p-2" />
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Contexto (opcional)</label>
-        <input id="contextNotes" type="text" placeholder="Ej: debut de Mbappé, ‘El Clásico’, UCL group stage" class="w-full border rounded-lg p-2" />
-      </div>
-    </section>
 
-    <section class="grid md:grid-cols-2 gap-4 mb-6">
-      <div>
-        <label class="block text-sm font-medium mb-1">Límite de caracteres</label>
-        <input id="maxLen" type="number" min="50" value="500" class="w-full border rounded-lg p-2" />
-      </div>
-      <div class="flex items-end gap-2">
-        <button id="generateBtn" class="px-4 py-2 rounded-xl bg-zinc-900 text-white font-medium hover:opacity-90">Generar tags</button>
-        <button id="copyBtn" class="px-4 py-2 rounded-xl border font-medium">Copiar</button>
-      </div>
-    </section>
+<div class="row">
+<div class="stack">
+<label for="competition">Competencia (opcional)</label>
+<input id="competition" placeholder="Ej: LaLiga" />
+</div>
+<div class="stack">
+<label for="maxLen">Límite de caracteres (default 500)</label>
+<input id="maxLen" type="number" min="100" step="10" placeholder="500" />
+</div>
+</div>
 
-    <section>
-      <label class="block text-sm font-medium mb-1">Resultado</label>
-      <textarea id="output" rows="6" class="w-full border rounded-lg p-2" readonly></textarea>
-      <p class="text-xs text-zinc-500 mt-2">Tip: YouTube acepta pegar la lista separada por comas.</p>
-    </section>
-  </main>
 
-  <script>
-    // Helpers
-    function parseScorers(raw) {
-      return raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    }
+<div class="stack">
+<label for="scorers">Goleadores (opcional, separados por coma)</label>
+<input id="scorers" placeholder="Ej: Vinícius Jr., Ayoze Pérez" />
+</div>
 
-    async function generarTags() {
-      const competition = document.getElementById('competition').value.trim();
-      const lang        = document.getElementById('lang').value;
-      const homeTeam    = document.getElementById('homeTeam').value.trim();
-      const awayTeam    = document.getElementById('awayTeam').value.trim();
-      const homeScore   = Number(document.getElementById('homeScore').value || 0);
-      const awayScore   = Number(document.getElementById('awayScore').value || 0);
-      const scorers     = parseScorers(document.getElementById('scorers').value || '');
-      const matchDate   = document.getElementById('matchDate').value.trim();
-      const contextNotes= document.getElementById('contextNotes').value.trim();
-      const maxLen      = Number(document.getElementById('maxLen').value || 500);
 
-      const output = document.getElementById('output');
-      output.value = 'Generando... ⏳';
+<div class="row">
+<div class="stack">
+<label for="lang">Idioma base</label>
+<select id="lang">
+<option value="es" selected>Español</option>
+<option value="en">English</option>
+</select>
+</div>
+<div class="stack">
+<label>&nbsp;</label>
+<button id="generateBtn">Generar tags</button>
+</div>
+</div>
 
-      try {
-        const res = await fetch('https://tags-hl-generator.vercel.app/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            competition, homeTeam, awayTeam, homeScore, awayScore,
-            scorers, lang, maxLen, matchDate, contextNotes
-          })
-        });
 
-        const data = await res.json();
-        if (!res.ok) {
-          console.error('Proxy error:', data);
-          output.value = 'Error generando tags.';
-          return;
-        }
-        output.value = data?.tags || 'Error generando tags.';
-      } catch (e) {
-        console.error(e);
-        output.value = 'Error generando tags.';
-      }
-    }
+<p class="muted">Nota: En inglés solo se generan exactamente tres: “equipo a equipo b highlights”, “equipo b equipo a highlights”, “highlights”. Además siempre se incluyen “Disney Plus” y “ESPN”.</p>
+</div>
 
-    document.getElementById('generateBtn').addEventListener('click', generarTags);
 
-    document.getElementById('copyBtn').addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(document.getElementById('output').value);
-        const btn = document.getElementById('copyBtn');
-        const old = btn.textContent;
-        btn.textContent = '¡Copiado!';
-        setTimeout(() => btn.textContent = old, 1500);
-      } catch {
-        alert('No se pudo copiar automáticamente. Seleccioná y copiá manualmente.');
-      }
-    });
-  </script>
-</body>
+<div class="card">
+<h3>Salida</h3>
+<div id="output" class="tags"></div>
+<p id="meta" class="muted"></p>
+</div>
+
+
+<script>
+const els = {
+teamA: document.getElementById('teamA'),
+teamB: document.getElementById('teamB'),
+competition: document.getElementById('competition'),
+scorers: document.getElementById('scorers'),
+lang: document.getElementById('lang'),
+maxLen: document.getElementById('maxLen'),
+btn: document.getElementById('generateBtn'),
+out: document.getElementById('output'),
+meta: document.getElementById('meta'),
+};
+
+
+// Persistencia simple en localStorage
+const LS_KEY = 'tags-gen-v2';
 </html>
