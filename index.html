@@ -22,16 +22,22 @@ button[disabled] { opacity: .6; cursor: not-allowed; }
 
 
 <div class="card">
-<div class="row">
-<div class="stack">
-<label for="teamA">Equipo A</label>
-<input id="teamA" placeholder="Ej: Real Madrid" />
-</div>
-<div class="stack">
-<label for="teamB">Equipo B</label>
-<input id="teamB" placeholder="Ej: Real Betis" />
-</div>
-</div>
+<div class=\"row\">
+<div class=\"stack\">
+<label for=\"teamA\">Equipo A<\/label>
+<input id=\"teamA\" placeholder=\"Ej: Real Madrid\" \/>
+<\/div>
+<div class=\"stack\">
+<label for=\"teamB\">Equipo B<\/label>
+<input id=\"teamB\" placeholder=\"Ej: Real Betis\" \/>
+<\/div>
+<\/div>
+
+
+<div class=\"stack\">
+<label for=\"apiUrl\">URL de la API (si usás GitHub Pages, poné acá tu endpoint de Vercel, ej: https:\/\/tu-app.vercel.app\/api\/generate)<\/label>
+<input id=\"apiUrl\" placeholder=\"\/api\/generate\" \/>
+<\/div>
 
 
 <div class="row">
@@ -67,31 +73,4 @@ button[disabled] { opacity: .6; cursor: not-allowed; }
 </div>
 
 
-<p class="muted">Nota: En inglés solo se generan exactamente tres: “equipo a equipo b highlights”, “equipo b equipo a highlights”, “highlights”. Además siempre se incluyen “Disney Plus” y “ESPN”.</p>
-</div>
-
-
-<div class="card">
-<h3>Salida</h3>
-<div id="output" class="tags"></div>
-<p id="meta" class="muted"></p>
-</div>
-
-
-<script>
-const els = {
-teamA: document.getElementById('teamA'),
-teamB: document.getElementById('teamB'),
-competition: document.getElementById('competition'),
-scorers: document.getElementById('scorers'),
-lang: document.getElementById('lang'),
-maxLen: document.getElementById('maxLen'),
-btn: document.getElementById('generateBtn'),
-out: document.getElementById('output'),
-meta: document.getElementById('meta'),
-};
-
-
-// Persistencia simple en localStorage
-const LS_KEY = 'tags-gen-v2';
 </html>
