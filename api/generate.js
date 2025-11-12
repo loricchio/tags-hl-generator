@@ -1,4 +1,3 @@
-// api/generate.js
 export default async function handler(req, res) {
   // --- CORS ---
   const ORIGIN = "https://loricchio.github.io"; // tu dominio público
@@ -127,8 +126,8 @@ export default async function handler(req, res) {
 
     // ---------- Prompt (reforzado ES-first) ----------
     const rules = `
-- Base en **español**. Conservar **solo 1–3 etiquetas** en inglés (útiles): siempre "highlights", "${hometeam} ${awayteam} highlights", "${awayteam] ${hometeam] highligts" o sus nombres cortos
-- Los tags "Disney Plus" y "ESPN" son obligatorios
+- Base en **español**. Conservar **solo 1–3 etiquetas** en inglés (útiles): siempre "highlights", "${hometeam} ${awayteam} highlights", "${awayteam] ${hometeam] highligts" o sus nombres cortos.
+- Los tags "Disney Plus" y "ESPN" son obligatorios.
 - NO inventar años/fechas/temporadas. SOLO incluir si viene explícito en 'matchDate'.
 - Sinónimos de competencia solo si corresponden con "${competition}".
 - Cruces SIEMPRE en ambos órdenes: "EquipoA EquipoB …" y "EquipoB EquipoA …".
