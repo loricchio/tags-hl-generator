@@ -1,80 +1,52 @@
 // =========================
-// 5) Aliases seguros (cortos)
-const aliases = [];
-if(aShort && aShort !== A) aliases.push(aShort);
-if(bShort && bShort !== B) aliases.push(bShort);
+// File: generate.js
+// =========================
+// Serverless handler (Next.js API Route / Vercel / Node ESM)
 
 
-// Ensamble por tiers
-const tiers = [
-enMandatory, // tier 0
-esMandatory, // tier 1
-context, // tier 2
-goalTags, // tier 3
-aliases // tier 4
+// --- Configuración de CORS ---
+const ALLOWED_ORIGINS = [
+'https://loricchio.github.io',
+'https://*.vercel.app',
+'http://localhost:3000',
+'http://127.0.0.1:3000'
 ];
 
 
-// Dedup inteligente
-const out = [];
-const seen = new Set();
-const keyOf = (t) => normalize(t).replace(/[^a-z0-9 ]/g,'');
-
-
-for(const tier of tiers){
-for(const t of tier){
-const key = keyOf(t);
-if(!key || seen.has(key)) continue;
-seen.add(key);
-// Casing final: nombres propios en Title Case, genéricos en minúsculas
-if(/highlights$/.test(t)){
-out.push(t); // ya vienen en lowercase exigido
-} else if(/^gol de /.test(t) || / vs /.test(t)){
-const parts = t.split(' vs ');
-if(parts.length===2){
-out.push(`${titleCaseName(parts[0])} vs ${titleCaseName(parts[1])}`);
-} else {
-// gol de X o resumen/goles
-if(/^gol de /.test(t)){
-out.push('gol de ' + titleCaseName(t.slice(7)));
-} else {
-out.push(t.toLowerCase());
+function cors(req, res){
+const origin = req.headers.origin || '';
+const allowed = ALLOWED_ORIGINS.some(p => {
+if(p.includes('*')){
+const base = p.replace('https://', '').replace('http://', '').replace('*.', '');
+return origin.endsWith(base);
 }
+return origin === p;
+});
+if(allowed){
+res.setHeader('Access-Control-Allow-Origin', origin);
+res.setHeader('Vary', 'Origin');
 }
-} else if(t === 'goles' || t === 'resumen'){
-out.push(t.toLowerCase());
-} else if(t === 'Disney Plus' || t === 'ESPN'){
-out.push(t); // marca
-} else {
-out.push(titleCaseName(t));
-}
-}
+res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
 
-// Asegurar que las 3 EN estén al inicio y no se recorten por el join
-// (el joinWithinLimit respeta el orden)
-return out;
+export default async function handler(req, res){
+cors(req,res);
+if(req.method === 'OPTIONS'){ res.status(204).end(); return; }
+if(req.method !== 'POST'){
+res.status(405).json({ error: 'Method not allowed' }); return;
+}
+try{
+const { teamA, teamB, competition = '', scorers = [], lang = 'es', maxLen = 500 } = req.body || {};
+
+
+if(!teamA || !teamB){
+res.status(400).json({ error: 'Faltan equipos.' }); return;
 }
 
 
-function joinWithinLimit(tags, maxLen){
-const sep = ', ';
-// Siempre preservar las 5 obligatorias (3 EN + 2 ES) si existen
-const mandatoryCount = 5;
-let acc = '';
-const out = [];
-for(let i=0;i<tags.length;i++){
-const t = tags[i];
-const add = out.length ? sep + t : t;
-if(acc.length + add.length > maxLen){
-// si estamos aún dentro de las obligatorias, forzar inclusión
-if(out.length < mandatoryCount){
-out.push(t); acc += add; continue;
-}
-break;
-}
-out.push(t); acc += add;
-}
-return out.join(sep);
-}
+// --- Cargar nicknames/teams ---
+const data = await loadNicknames();
+const teamsMap = data.teams || {};
+
